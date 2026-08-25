@@ -14,6 +14,7 @@ const graph = {
 const ui = {
 	selectedNodeId: null,
 	draggingNodeId: null,
+	selectMode: true,
 	addNodeMode: false,
 	addEdgeMode: false,
 	edgeSourceNodeId: null,
@@ -29,6 +30,13 @@ app.innerHTML = `
 		</p>
 
 		<div style="display: flex; align-items: center; gap: 12px; margin: 0 0 14px;">
+			<button
+				id="select-btn"
+				type="button"
+				style="padding: 8px 12px; border: 1px solid #0f172a; border-radius: 8px; background: #0f172a; color: #ffffff; cursor: pointer;"
+			>
+				Select
+			</button>
 			<button
 				id="add-node-btn"
 				type="button"
@@ -55,6 +63,7 @@ app.innerHTML = `
 `;
 
 const svg = document.querySelector('#graph-svg');
+const selectBtn = document.querySelector('#select-btn');
 const addNodeBtn = document.querySelector('#add-node-btn');
 const addEdgeBtn = document.querySelector('#add-edge-btn');
 const modeLabel = document.querySelector('#mode-label');
@@ -194,12 +203,16 @@ function renderGraph() {
 }
 
 function updateModeUi() {
+	const activeButtonStyle = (button, isActive) => {
+		button.style.background = isActive ? '#0f172a' : '#ffffff';
+		button.style.color = isActive ? '#ffffff' : '#0f172a';
+	};
+
+	activeButtonStyle(selectBtn, ui.selectMode);
 	addNodeBtn.textContent = `Add Node: ${ui.addNodeMode ? 'On' : 'Off'}`;
-	addNodeBtn.style.background = ui.addNodeMode ? '#0f172a' : '#ffffff';
-	addNodeBtn.style.color = ui.addNodeMode ? '#ffffff' : '#0f172a';
+	activeButtonStyle(addNodeBtn, ui.addNodeMode);
 	addEdgeBtn.textContent = `Add Edge: ${ui.addEdgeMode ? 'On' : 'Off'}`;
-	addEdgeBtn.style.background = ui.addEdgeMode ? '#0f172a' : '#ffffff';
-	addEdgeBtn.style.color = ui.addEdgeMode ? '#ffffff' : '#0f172a';
+	activeButtonStyle(addEdgeBtn, ui.addEdgeMode);
 	modeLabel.textContent = ui.addNodeMode
 		? 'Mode: Add Node'
 		: ui.addEdgeMode
@@ -207,6 +220,16 @@ function updateModeUi() {
 				? `Mode: Add Edge (source: ${ui.edgeSourceNodeId})`
 				: 'Mode: Add Edge (select source)'
 			: 'Mode: Select / Drag';
+}
+
+function setMode(mode) {
+	ui.selectMode = mode === 'select';
+	ui.addNodeMode = mode === 'add-node';
+	ui.addEdgeMode = mode === 'add-edge';
+	ui.edgeSourceNodeId = null;
+	ui.draggingNodeId = null;
+	updateModeUi();
+	renderGraph();
 }
 
 function hasEdgeBetween(sourceId, targetId) {
@@ -266,6 +289,10 @@ function onPointerDown(event) {
 		return;
 	}
 
+	if (!ui.selectMode) {
+		return;
+	}
+
 	if (!nodeId) {
 		ui.selectedNodeId = null;
 		renderGraph();
@@ -302,20 +329,15 @@ function onPointerUp(event) {
 }
 
 addNodeBtn.addEventListener('click', () => {
-	ui.addNodeMode = !ui.addNodeMode;
-	if (ui.addNodeMode) {
-		ui.addEdgeMode = false;
-		ui.edgeSourceNodeId = null;
-	}
-	updateModeUi();
+	setMode(ui.addNodeMode ? 'select' : 'add-node');
 });
 
 addEdgeBtn.addEventListener('click', () => {
-	ui.addEdgeMode = !ui.addEdgeMode;
-	ui.addNodeMode = false;
-	ui.edgeSourceNodeId = null;
-	updateModeUi();
-	renderGraph();
+	setMode(ui.addEdgeMode ? 'select' : 'add-edge');
+});
+
+selectBtn.addEventListener('click', () => {
+	setMode('select');
 });
 
 svg.addEventListener('pointerdown', onPointerDown);
