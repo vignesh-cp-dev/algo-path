@@ -17,6 +17,7 @@ const ui = {
 	selectMode: true,
 	addNodeMode: false,
 	addEdgeMode: false,
+	deleteMode: false,
 	edgeSourceNodeId: null,
 };
 
@@ -51,6 +52,13 @@ app.innerHTML = `
 			>
 				Add Edge: Off
 			</button>
+			<button
+				id="delete-btn"
+				type="button"
+				style="padding: 8px 12px; border: 1px solid #b91c1c; border-radius: 8px; background: #ffffff; color: #b91c1c; cursor: pointer;"
+			>
+				Delete
+			</button>
 			<span id="mode-label" style="font-size: 0.95rem; opacity: 0.8;">Mode: Select / Drag</span>
 		</div>
 
@@ -66,6 +74,7 @@ const svg = document.querySelector('#graph-svg');
 const selectBtn = document.querySelector('#select-btn');
 const addNodeBtn = document.querySelector('#add-node-btn');
 const addEdgeBtn = document.querySelector('#add-edge-btn');
+const deleteBtn = document.querySelector('#delete-btn');
 const modeLabel = document.querySelector('#mode-label');
 
 function createSvgElement(tag, attrs = {}) {
@@ -163,7 +172,7 @@ function renderNodes() {
 }
 
 function renderEdges() {
-	graph.edges.forEach((edge) => {
+	graph.edges.forEach((edge, edgeIndex) => {
 		const source = getNodeById(edge.source);
 		const target = getNodeById(edge.target);
 
@@ -178,7 +187,8 @@ function renderEdges() {
 			y2: target.y,
 			stroke: '#64748b',
 			'stroke-width': 2,
-			'pointer-events': 'none',
+			'pointer-events': 'stroke',
+			'data-edge-index': edgeIndex,
 		});
 		const weight = createSvgElement('text', {
 			x: (source.x + target.x) / 2,
@@ -188,7 +198,8 @@ function renderEdges() {
 			'font-family': 'sans-serif',
 			'font-weight': 'bold',
 			fill: '#0f172a',
-			'pointer-events': 'none',
+			'pointer-events': 'all',
+			'data-edge-index': edgeIndex,
 		});
 		weight.textContent = String(edge.weight);
 		svg.appendChild(line);
@@ -213,19 +224,24 @@ function updateModeUi() {
 	activeButtonStyle(addNodeBtn, ui.addNodeMode);
 	addEdgeBtn.textContent = `Add Edge: ${ui.addEdgeMode ? 'On' : 'Off'}`;
 	activeButtonStyle(addEdgeBtn, ui.addEdgeMode);
+	deleteBtn.style.background = ui.deleteMode ? '#b91c1c' : '#ffffff';
+	deleteBtn.style.color = ui.deleteMode ? '#ffffff' : '#b91c1c';
 	modeLabel.textContent = ui.addNodeMode
 		? 'Mode: Add Node'
 		: ui.addEdgeMode
 			? ui.edgeSourceNodeId
 				? `Mode: Add Edge (source: ${ui.edgeSourceNodeId})`
 				: 'Mode: Add Edge (select source)'
-			: 'Mode: Select / Drag';
+			: ui.deleteMode
+				? 'Mode: Delete (click a node or edge)'
+				: 'Mode: Select / Drag';
 }
 
 function setMode(mode) {
 	ui.selectMode = mode === 'select';
 	ui.addNodeMode = mode === 'add-node';
 	ui.addEdgeMode = mode === 'add-edge';
+	ui.deleteMode = mode === 'delete';
 	ui.edgeSourceNodeId = null;
 	ui.draggingNodeId = null;
 	updateModeUi();
@@ -256,6 +272,21 @@ function addEdgeBetween(sourceId, targetId) {
 	return true;
 }
 
+function deleteNode(nodeId) {
+	graph.nodes = graph.nodes.filter((node) => node.id !== nodeId);
+	graph.edges = graph.edges.filter((edge) => edge.source !== nodeId && edge.target !== nodeId);
+	if (ui.selectedNodeId === nodeId) {
+		ui.selectedNodeId = null;
+	}
+	if (ui.edgeSourceNodeId === nodeId) {
+		ui.edgeSourceNodeId = null;
+	}
+}
+
+function deleteEdge(edgeIndex) {
+	graph.edges.splice(edgeIndex, 1);
+}
+
 function onPointerDown(event) {
 	const target = event.target;
 	if (!(target instanceof SVGElement)) {
@@ -267,6 +298,17 @@ function onPointerDown(event) {
 	if (ui.addNodeMode && !nodeId) {
 		const { x, y } = toSvgPoint(event.clientX, event.clientY);
 		addNodeAtPosition(x, y);
+		renderGraph();
+		return;
+	}
+
+	if (ui.deleteMode) {
+		const edgeIndex = target.getAttribute('data-edge-index');
+		if (nodeId) {
+			deleteNode(nodeId);
+		} else if (edgeIndex !== null) {
+			deleteEdge(Number(edgeIndex));
+		}
 		renderGraph();
 		return;
 	}
@@ -334,6 +376,10 @@ addNodeBtn.addEventListener('click', () => {
 
 addEdgeBtn.addEventListener('click', () => {
 	setMode(ui.addEdgeMode ? 'select' : 'add-edge');
+});
+
+deleteBtn.addEventListener('click', () => {
+	setMode(ui.deleteMode ? 'select' : 'delete');
 });
 
 selectBtn.addEventListener('click', () => {
