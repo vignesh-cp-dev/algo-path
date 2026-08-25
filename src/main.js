@@ -15,6 +15,8 @@ const ui = {
 	selectedNodeId: null,
 	draggingNodeId: null,
 	addNodeMode: false,
+	addEdgeMode: false,
+	edgeSourceNodeId: null,
 };
 
 const app = document.querySelector('#app');
@@ -34,6 +36,13 @@ app.innerHTML = `
 			>
 				Add Node: Off
 			</button>
+			<button
+				id="add-edge-btn"
+				type="button"
+				style="padding: 8px 12px; border: 1px solid #0f172a; border-radius: 8px; background: #ffffff; cursor: pointer;"
+			>
+				Add Edge: Off
+			</button>
 			<span id="mode-label" style="font-size: 0.95rem; opacity: 0.8;">Mode: Select / Drag</span>
 		</div>
 
@@ -47,6 +56,7 @@ app.innerHTML = `
 
 const svg = document.querySelector('#graph-svg');
 const addNodeBtn = document.querySelector('#add-node-btn');
+const addEdgeBtn = document.querySelector('#add-edge-btn');
 const modeLabel = document.querySelector('#mode-label');
 
 function createSvgElement(tag, attrs = {}) {
@@ -108,6 +118,7 @@ function toSvgPoint(clientX, clientY) {
 function renderNodes() {
 	graph.nodes.forEach((node) => {
 		const isSelected = ui.selectedNodeId === node.id;
+		const isEdgeSource = ui.edgeSourceNodeId === node.id;
 
 		const nodeGroup = createSvgElement('g', {
 			'data-node-id': node.id,
@@ -118,9 +129,9 @@ function renderNodes() {
 			cx: node.x,
 			cy: node.y,
 			r: 24,
-			fill: isSelected ? '#0ea5e9' : '#22c55e',
-			stroke: '#0f172a',
-			'stroke-width': isSelected ? 3 : 2,
+			fill: isEdgeSource ? '#f59e0b' : isSelected ? '#0ea5e9' : '#22c55e',
+			stroke: isEdgeSource ? '#b45309' : '#0f172a',
+			'stroke-width': isEdgeSource || isSelected ? 3 : 2,
 			'data-node-id': node.id,
 		});
 
@@ -142,8 +153,43 @@ function renderNodes() {
 	});
 }
 
+function renderEdges() {
+	graph.edges.forEach((edge) => {
+		const source = getNodeById(edge.source);
+		const target = getNodeById(edge.target);
+
+		if (!source || !target) {
+			return;
+		}
+
+		const line = createSvgElement('line', {
+			x1: source.x,
+			y1: source.y,
+			x2: target.x,
+			y2: target.y,
+			stroke: '#64748b',
+			'stroke-width': 2,
+			'pointer-events': 'none',
+		});
+		const weight = createSvgElement('text', {
+			x: (source.x + target.x) / 2,
+			y: (source.y + target.y) / 2 - 8,
+			'text-anchor': 'middle',
+			'font-size': 13,
+			'font-family': 'sans-serif',
+			'font-weight': 'bold',
+			fill: '#0f172a',
+			'pointer-events': 'none',
+		});
+		weight.textContent = String(edge.weight);
+		svg.appendChild(line);
+		svg.appendChild(weight);
+	});
+}
+
 function renderGraph() {
 	svg.replaceChildren();
+	renderEdges();
 	renderNodes();
 }
 
@@ -151,7 +197,40 @@ function updateModeUi() {
 	addNodeBtn.textContent = `Add Node: ${ui.addNodeMode ? 'On' : 'Off'}`;
 	addNodeBtn.style.background = ui.addNodeMode ? '#0f172a' : '#ffffff';
 	addNodeBtn.style.color = ui.addNodeMode ? '#ffffff' : '#0f172a';
-	modeLabel.textContent = ui.addNodeMode ? 'Mode: Add Node' : 'Mode: Select / Drag';
+	addEdgeBtn.textContent = `Add Edge: ${ui.addEdgeMode ? 'On' : 'Off'}`;
+	addEdgeBtn.style.background = ui.addEdgeMode ? '#0f172a' : '#ffffff';
+	addEdgeBtn.style.color = ui.addEdgeMode ? '#ffffff' : '#0f172a';
+	modeLabel.textContent = ui.addNodeMode
+		? 'Mode: Add Node'
+		: ui.addEdgeMode
+			? ui.edgeSourceNodeId
+				? `Mode: Add Edge (source: ${ui.edgeSourceNodeId})`
+				: 'Mode: Add Edge (select source)'
+			: 'Mode: Select / Drag';
+}
+
+function hasEdgeBetween(sourceId, targetId) {
+	return graph.edges.some(
+		(edge) =>
+			(edge.source === sourceId && edge.target === targetId) ||
+			(edge.source === targetId && edge.target === sourceId),
+	);
+}
+
+function addEdgeBetween(sourceId, targetId) {
+	if (sourceId === targetId || hasEdgeBetween(sourceId, targetId)) {
+		return false;
+	}
+
+	const input = window.prompt(`Enter a positive weight for edge ${sourceId}-${targetId}:`);
+	const weight = Number(input);
+
+	if (input === null || input.trim() === '' || !Number.isFinite(weight) || weight <= 0) {
+		return false;
+	}
+
+	graph.edges.push({ source: sourceId, target: targetId, weight });
+	return true;
 }
 
 function onPointerDown(event) {
@@ -165,6 +244,24 @@ function onPointerDown(event) {
 	if (ui.addNodeMode && !nodeId) {
 		const { x, y } = toSvgPoint(event.clientX, event.clientY);
 		addNodeAtPosition(x, y);
+		renderGraph();
+		return;
+	}
+
+	if (ui.addEdgeMode) {
+		if (!nodeId) {
+			return;
+		}
+
+		if (!ui.edgeSourceNodeId) {
+			ui.edgeSourceNodeId = nodeId;
+			ui.selectedNodeId = nodeId;
+		} else if (addEdgeBetween(ui.edgeSourceNodeId, nodeId)) {
+			ui.selectedNodeId = nodeId;
+			ui.edgeSourceNodeId = null;
+		}
+
+		updateModeUi();
 		renderGraph();
 		return;
 	}
@@ -206,7 +303,19 @@ function onPointerUp(event) {
 
 addNodeBtn.addEventListener('click', () => {
 	ui.addNodeMode = !ui.addNodeMode;
+	if (ui.addNodeMode) {
+		ui.addEdgeMode = false;
+		ui.edgeSourceNodeId = null;
+	}
 	updateModeUi();
+});
+
+addEdgeBtn.addEventListener('click', () => {
+	ui.addEdgeMode = !ui.addEdgeMode;
+	ui.addNodeMode = false;
+	ui.edgeSourceNodeId = null;
+	updateModeUi();
+	renderGraph();
 });
 
 svg.addEventListener('pointerdown', onPointerDown);
