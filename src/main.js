@@ -272,6 +272,22 @@ function addEdgeBetween(sourceId, targetId) {
 	return true;
 }
 
+function editEdgeWeight(edgeIndex) {
+	const edge = graph.edges[edgeIndex];
+	if (!edge) {
+		return;
+	}
+
+	const input = window.prompt('Enter a new positive weight for this edge:', String(edge.weight));
+	const weight = Number(input);
+
+	if (input === null || input.trim() === '' || !Number.isFinite(weight) || weight <= 0) {
+		return;
+	}
+
+	edge.weight = weight;
+}
+
 function deleteNode(nodeId) {
 	graph.nodes = graph.nodes.filter((node) => node.id !== nodeId);
 	graph.edges = graph.edges.filter((edge) => edge.source !== nodeId && edge.target !== nodeId);
@@ -332,6 +348,13 @@ function onPointerDown(event) {
 	}
 
 	if (!ui.selectMode) {
+		return;
+	}
+
+	const edgeIndex = target.getAttribute('data-edge-index');
+	if (edgeIndex !== null) {
+		editEdgeWeight(Number(edgeIndex));
+		renderGraph();
 		return;
 	}
 
