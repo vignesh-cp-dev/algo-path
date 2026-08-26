@@ -1,4 +1,5 @@
 import { buildAdjacencyList } from './graph.js';
+import { dijkstra } from './dijkstra.js';
 
 const svgNS = 'http://www.w3.org/2000/svg';
 
@@ -14,7 +15,13 @@ const graph = {
 		{ id: 'D', x: 260, y: 290 },
 	],
 
-	edges: [],
+	// TEMPORARY M4B TEST GRAPH
+	edges: [
+		{ source: 'A', target: 'B', weight: 5 },
+		{ source: 'A', target: 'C', weight: 2 },
+		{ source: 'C', target: 'D', weight: 3 },
+		{ source: 'B', target: 'D', weight: 1 },
+	],
 };
 
 // ======================================================
@@ -34,25 +41,42 @@ const ui = {
 };
 
 // ======================================================
-// DEBUG / ALGORITHM REPRESENTATION
+// M4B — DIJKSTRA TEST
 // ======================================================
 
-// This creates a snapshot of the current graph's
-// adjacency list and prints it to the console.
-//
-// JSON.stringify() is intentional here.
-// It lets us see the exact state at that moment.
+const adjacencyList = buildAdjacencyList(graph);
 
-function logAdjacencyList() {
-	const adjacencyList = buildAdjacencyList(graph);
+const dijkstraResult = dijkstra(
+	adjacencyList,
+	'A'
+);
 
-	console.log(
-		'Current adjacency list:\n' +
-			JSON.stringify(adjacencyList, null, 2)
-	);
+console.log(
+	'========== DIJKSTRA TEST =========='
+);
 
-	return adjacencyList;
-}
+console.log(
+	'Adjacency List:',
+	JSON.stringify(
+		adjacencyList,
+		null,
+		2
+	)
+);
+
+console.log(
+	'Distances:',
+	dijkstraResult.distances
+);
+
+console.log(
+	'Previous:',
+	dijkstraResult.previous
+);
+
+console.log(
+	'===================================='
+);
 
 // ======================================================
 // APP UI
@@ -176,22 +200,43 @@ app.innerHTML = `
 
 const svg = document.querySelector('#graph-svg');
 
-const selectBtn = document.querySelector('#select-btn');
-const addNodeBtn = document.querySelector('#add-node-btn');
-const addEdgeBtn = document.querySelector('#add-edge-btn');
-const deleteBtn = document.querySelector('#delete-btn');
-const modeLabel = document.querySelector('#mode-label');
+const selectBtn =
+	document.querySelector('#select-btn');
+
+const addNodeBtn =
+	document.querySelector('#add-node-btn');
+
+const addEdgeBtn =
+	document.querySelector('#add-edge-btn');
+
+const deleteBtn =
+	document.querySelector('#delete-btn');
+
+const modeLabel =
+	document.querySelector('#mode-label');
 
 // ======================================================
 // SVG HELPER
 // ======================================================
 
-function createSvgElement(tag, attrs = {}) {
-	const element = document.createElementNS(svgNS, tag);
+function createSvgElement(
+	tag,
+	attrs = {}
+) {
+	const element =
+		document.createElementNS(
+			svgNS,
+			tag
+		);
 
-	Object.entries(attrs).forEach(([key, value]) => {
-		element.setAttribute(key, String(value));
-	});
+	Object.entries(attrs).forEach(
+		([key, value]) => {
+			element.setAttribute(
+				key,
+				String(value)
+			);
+		}
+	);
 
 	return element;
 }
@@ -201,7 +246,9 @@ function createSvgElement(tag, attrs = {}) {
 // ======================================================
 
 function getNodeById(id) {
-	return graph.nodes.find((node) => node.id === id);
+	return graph.nodes.find(
+		(node) => node.id === id
+	);
 }
 
 function indexToNodeId(index) {
@@ -209,29 +256,39 @@ function indexToNodeId(index) {
 	let id = '';
 
 	while (value > 0) {
-		const remainder = (value - 1) % 26;
+		const remainder =
+			(value - 1) % 26;
 
 		id =
-			String.fromCharCode(65 + remainder) +
-			id;
+			String.fromCharCode(
+				65 + remainder
+			) + id;
 
-		value = Math.floor((value - 1) / 26);
+		value =
+			Math.floor(
+				(value - 1) / 26
+			);
 	}
 
 	return id;
 }
 
 function getNextNodeId() {
-	const usedIds = new Set(
-		graph.nodes.map((node) => node.id)
-	);
+	const usedIds =
+		new Set(
+			graph.nodes.map(
+				(node) => node.id
+			)
+		);
 
 	let index = 0;
 
 	while (
-		usedIds.has(indexToNodeId(index))
+		usedIds.has(
+			indexToNodeId(index)
+		)
 	) {
-		index += 1;
+		index++;
 	}
 
 	return indexToNodeId(index);
@@ -241,8 +298,12 @@ function getNextNodeId() {
 // NODE CREATION
 // ======================================================
 
-function addNodeAtPosition(x, y) {
-	const id = getNextNodeId();
+function addNodeAtPosition(
+	x,
+	y
+) {
+	const id =
+		getNextNodeId();
 
 	const newNode = {
 		id,
@@ -258,24 +319,32 @@ function addNodeAtPosition(x, y) {
 		),
 	};
 
-	graph.nodes.push(newNode);
+	graph.nodes.push(
+		newNode
+	);
 
 	ui.selectedNodeId = id;
 }
 
 // ======================================================
-// SVG COORDINATE CONVERSION
+// SVG COORDINATES
 // ======================================================
 
-function toSvgPoint(clientX, clientY) {
-	const point = svg.createSVGPoint();
+function toSvgPoint(
+	clientX,
+	clientY
+) {
+	const point =
+		svg.createSVGPoint();
 
 	point.x = clientX;
 	point.y = clientY;
 
 	const transformedPoint =
 		point.matrixTransform(
-			svg.getScreenCTM().inverse()
+			svg
+				.getScreenCTM()
+				.inverse()
 		);
 
 	return {
@@ -289,74 +358,100 @@ function toSvgPoint(clientX, clientY) {
 // ======================================================
 
 function renderNodes() {
-	graph.nodes.forEach((node) => {
-		const isSelected =
-			ui.selectedNodeId === node.id;
+	graph.nodes.forEach(
+		(node) => {
+			const isSelected =
+				ui.selectedNodeId ===
+				node.id;
 
-		const isEdgeSource =
-			ui.edgeSourceNodeId === node.id;
+			const isEdgeSource =
+				ui.edgeSourceNodeId ===
+				node.id;
 
-		const nodeGroup = createSvgElement(
-			'g',
-			{
-				'data-node-id': node.id,
-				style: 'cursor: grab;',
-			}
-		);
+			const nodeGroup =
+				createSvgElement(
+					'g',
+					{
+						'data-node-id':
+							node.id,
 
-		const circle = createSvgElement(
-			'circle',
-			{
-				cx: node.x,
-				cy: node.y,
-				r: 24,
+						style:
+							'cursor: grab;',
+					}
+				);
 
-				fill: isEdgeSource
-					? '#f59e0b'
-					: isSelected
-						? '#0ea5e9'
-						: '#22c55e',
+			const circle =
+				createSvgElement(
+					'circle',
+					{
+						cx: node.x,
+						cy: node.y,
+						r: 24,
 
-				stroke: isEdgeSource
-					? '#b45309'
-					: '#0f172a',
+						fill:
+							isEdgeSource
+								? '#f59e0b'
+								: isSelected
+									? '#0ea5e9'
+									: '#22c55e',
 
-				'stroke-width':
-					isEdgeSource || isSelected
-						? 3
-						: 2,
+						stroke:
+							isEdgeSource
+								? '#b45309'
+								: '#0f172a',
 
-				'data-node-id': node.id,
-			}
-		);
+						'stroke-width':
+							isEdgeSource ||
+							isSelected
+								? 3
+								: 2,
 
-		const label = createSvgElement(
-			'text',
-			{
-				x: node.x,
-				y: node.y + 5,
+						'data-node-id':
+							node.id,
+					}
+				);
 
-				'text-anchor': 'middle',
+			const label =
+				createSvgElement(
+					'text',
+					{
+						x: node.x,
+						y: node.y + 5,
 
-				'font-size': 14,
+						'text-anchor':
+							'middle',
 
-				'font-family': 'sans-serif',
+						'font-size': 14,
 
-				'font-weight': 'bold',
+						'font-family':
+							'sans-serif',
 
-				fill: '#ffffff',
+						'font-weight':
+							'bold',
 
-				'pointer-events': 'none',
-			}
-		);
+						fill: '#ffffff',
 
-		label.textContent = node.id;
+						'pointer-events':
+							'none',
+					}
+				);
 
-		nodeGroup.appendChild(circle);
-		nodeGroup.appendChild(label);
+			label.textContent =
+				node.id;
 
-		svg.appendChild(nodeGroup);
-	});
+			nodeGroup.appendChild(
+				circle
+			);
+
+			nodeGroup.appendChild(
+				label
+			);
+
+			svg.appendChild(
+				nodeGroup
+			);
+		}
+	);
 }
 
 // ======================================================
@@ -367,69 +462,93 @@ function renderEdges() {
 	graph.edges.forEach(
 		(edge, edgeIndex) => {
 			const source =
-				getNodeById(edge.source);
+				getNodeById(
+					edge.source
+				);
 
 			const target =
-				getNodeById(edge.target);
+				getNodeById(
+					edge.target
+				);
 
-			if (!source || !target) {
+			if (
+				!source ||
+				!target
+			) {
 				return;
 			}
 
-			const line = createSvgElement(
-				'line',
-				{
-					x1: source.x,
-					y1: source.y,
+			const line =
+				createSvgElement(
+					'line',
+					{
+						x1: source.x,
+						y1: source.y,
 
-					x2: target.x,
-					y2: target.y,
+						x2: target.x,
+						y2: target.y,
 
-					stroke: '#64748b',
+						stroke:
+							'#64748b',
 
-					'stroke-width': 2,
+						'stroke-width': 2,
 
-					'pointer-events': 'stroke',
+						'pointer-events':
+							'stroke',
 
-					'data-edge-index':
-						edgeIndex,
-				}
-			);
+						'data-edge-index':
+							edgeIndex,
+					}
+				);
 
-			const weight = createSvgElement(
-				'text',
-				{
-					x:
-						(source.x + target.x) /
-						2,
+			const weight =
+				createSvgElement(
+					'text',
+					{
+						x:
+							(source.x +
+								target.x) /
+							2,
 
-					y:
-						(source.y + target.y) /
-						2 -
-						8,
+						y:
+							(source.y +
+								target.y) /
+								2 -
+							8,
 
-					'text-anchor': 'middle',
+						'text-anchor':
+							'middle',
 
-					'font-size': 13,
+						'font-size': 13,
 
-					'font-family': 'sans-serif',
+						'font-family':
+							'sans-serif',
 
-					'font-weight': 'bold',
+						'font-weight':
+							'bold',
 
-					fill: '#0f172a',
+						fill: '#0f172a',
 
-					'pointer-events': 'all',
+						'pointer-events':
+							'all',
 
-					'data-edge-index':
-						edgeIndex,
-				}
-			);
+						'data-edge-index':
+							edgeIndex,
+					}
+				);
 
 			weight.textContent =
-				String(edge.weight);
+				String(
+					edge.weight
+				);
 
-			svg.appendChild(line);
-			svg.appendChild(weight);
+			svg.appendChild(
+				line
+			);
+
+			svg.appendChild(
+				weight
+			);
 		}
 	);
 }
@@ -450,20 +569,18 @@ function renderGraph() {
 // ======================================================
 
 function updateModeUi() {
-	const activeButtonStyle = (
-		button,
-		isActive
-	) => {
-		button.style.background =
-			isActive
-				? '#0f172a'
-				: '#ffffff';
+	const activeButtonStyle =
+		(button, isActive) => {
+			button.style.background =
+				isActive
+					? '#0f172a'
+					: '#ffffff';
 
-		button.style.color =
-			isActive
-				? '#ffffff'
-				: '#0f172a';
-	};
+			button.style.color =
+				isActive
+					? '#ffffff'
+					: '#0f172a';
+		};
 
 	activeButtonStyle(
 		selectBtn,
@@ -507,12 +624,16 @@ function updateModeUi() {
 	if (ui.addNodeMode) {
 		modeLabel.textContent =
 			'Mode: Add Node';
-	} else if (ui.addEdgeMode) {
+	} else if (
+		ui.addEdgeMode
+	) {
 		modeLabel.textContent =
 			ui.edgeSourceNodeId
 				? `Mode: Add Edge (source: ${ui.edgeSourceNodeId})`
 				: 'Mode: Add Edge (select source)';
-	} else if (ui.deleteMode) {
+	} else if (
+		ui.deleteMode
+	) {
 		modeLabel.textContent =
 			'Mode: Delete (click a node or edge)';
 	} else {
@@ -538,12 +659,13 @@ function setMode(mode) {
 	ui.deleteMode =
 		mode === 'delete';
 
-	ui.edgeSourceNodeId = null;
+	ui.edgeSourceNodeId =
+		null;
 
-	ui.draggingNodeId = null;
+	ui.draggingNodeId =
+		null;
 
 	updateModeUi();
-
 	renderGraph();
 }
 
@@ -558,12 +680,16 @@ function hasEdgeBetween(
 	return graph.edges.some(
 		(edge) =>
 			(
-				edge.source === sourceId &&
-				edge.target === targetId
+				edge.source ===
+					sourceId &&
+				edge.target ===
+					targetId
 			) ||
 			(
-				edge.source === targetId &&
-				edge.target === sourceId
+				edge.source ===
+					targetId &&
+				edge.target ===
+					sourceId
 			)
 	);
 }
@@ -586,22 +712,28 @@ function addEdgeBetween(
 		return false;
 	}
 
-	const input = window.prompt(
-		`Enter a positive weight for edge ${sourceId}-${targetId}:`
-	);
+	const input =
+		window.prompt(
+			`Enter a positive weight for edge ${sourceId}-${targetId}:`
+		);
 
 	if (input === null) {
 		return false;
 	}
 
-	if (input.trim() === '') {
+	if (
+		input.trim() === ''
+	) {
 		return false;
 	}
 
-	const weight = Number(input);
+	const weight =
+		Number(input);
 
 	if (
-		!Number.isFinite(weight) ||
+		!Number.isFinite(
+			weight
+		) ||
 		weight <= 0
 	) {
 		return false;
@@ -613,10 +745,6 @@ function addEdgeBetween(
 		weight,
 	});
 
-	// IMPORTANT:
-	// Log AFTER the edge is added.
-	logAdjacencyList();
-
 	return true;
 }
 
@@ -624,96 +752,112 @@ function addEdgeBetween(
 // EDIT EDGE WEIGHT
 // ======================================================
 
-function editEdgeWeight(edgeIndex) {
+function editEdgeWeight(
+	edgeIndex
+) {
 	const edge =
-		graph.edges[edgeIndex];
+		graph.edges[
+			edgeIndex
+		];
 
 	if (!edge) {
 		return;
 	}
 
-	const input = window.prompt(
-		'Enter a new positive weight for this edge:',
-		String(edge.weight)
-	);
+	const input =
+		window.prompt(
+			'Enter a new positive weight for this edge:',
+			String(edge.weight)
+		);
 
 	if (input === null) {
 		return;
 	}
 
-	if (input.trim() === '') {
-		return;
-	}
-
-	const weight = Number(input);
+	const weight =
+		Number(input);
 
 	if (
-		!Number.isFinite(weight) ||
+		!Number.isFinite(
+			weight
+		) ||
 		weight <= 0
 	) {
 		return;
 	}
 
-	edge.weight = weight;
-
-	logAdjacencyList();
+	edge.weight =
+		weight;
 }
 
 // ======================================================
 // DELETE NODE
 // ======================================================
 
-function deleteNode(nodeId) {
+function deleteNode(
+	nodeId
+) {
 	graph.nodes =
 		graph.nodes.filter(
 			(node) =>
-				node.id !== nodeId
+				node.id !==
+				nodeId
 		);
 
 	graph.edges =
 		graph.edges.filter(
 			(edge) =>
-				edge.source !== nodeId &&
-				edge.target !== nodeId
+				edge.source !==
+					nodeId &&
+				edge.target !==
+					nodeId
 		);
 
 	if (
-		ui.selectedNodeId === nodeId
+		ui.selectedNodeId ===
+		nodeId
 	) {
-		ui.selectedNodeId = null;
+		ui.selectedNodeId =
+			null;
 	}
 
 	if (
-		ui.edgeSourceNodeId === nodeId
+		ui.edgeSourceNodeId ===
+		nodeId
 	) {
-		ui.edgeSourceNodeId = null;
+		ui.edgeSourceNodeId =
+			null;
 	}
-
-	logAdjacencyList();
 }
 
 // ======================================================
 // DELETE EDGE
 // ======================================================
 
-function deleteEdge(edgeIndex) {
+function deleteEdge(
+	edgeIndex
+) {
 	graph.edges.splice(
 		edgeIndex,
 		1
 	);
-
-	logAdjacencyList();
 }
 
 // ======================================================
 // POINTER DOWN
 // ======================================================
 
-function onPointerDown(event) {
-	const target = event.target;
+function onPointerDown(
+	event
+) {
+	const target =
+		event.target;
 
 	if (
-		!(target instanceof SVGElement)
+		!(
+			target instanceof
+			SVGElement
+		)
 	) {
 		return;
 	}
@@ -723,30 +867,31 @@ function onPointerDown(event) {
 			'data-node-id'
 		);
 
-	// --------------------------------------------------
-	// ADD NODE MODE
-	// --------------------------------------------------
+	// ADD NODE
 
 	if (
 		ui.addNodeMode &&
 		!nodeId
 	) {
-		const { x, y } =
-			toSvgPoint(
-				event.clientX,
-				event.clientY
-			);
+		const {
+			x,
+			y,
+		} = toSvgPoint(
+			event.clientX,
+			event.clientY
+		);
 
-		addNodeAtPosition(x, y);
+		addNodeAtPosition(
+			x,
+			y
+		);
 
 		renderGraph();
 
 		return;
 	}
 
-	// --------------------------------------------------
-	// DELETE MODE
-	// --------------------------------------------------
+	// DELETE
 
 	if (ui.deleteMode) {
 		const edgeIndex =
@@ -755,7 +900,9 @@ function onPointerDown(event) {
 			);
 
 		if (nodeId) {
-			deleteNode(nodeId);
+			deleteNode(
+				nodeId
+			);
 		} else if (
 			edgeIndex !== null
 		) {
@@ -769,16 +916,16 @@ function onPointerDown(event) {
 		return;
 	}
 
-	// --------------------------------------------------
-	// ADD EDGE MODE
-	// --------------------------------------------------
+	// ADD EDGE
 
 	if (ui.addEdgeMode) {
 		if (!nodeId) {
 			return;
 		}
 
-		if (!ui.edgeSourceNodeId) {
+		if (
+			!ui.edgeSourceNodeId
+		) {
 			ui.edgeSourceNodeId =
 				nodeId;
 
@@ -804,15 +951,12 @@ function onPointerDown(event) {
 		}
 
 		updateModeUi();
-
 		renderGraph();
 
 		return;
 	}
 
-	// --------------------------------------------------
-	// SELECT MODE
-	// --------------------------------------------------
+	// SELECT
 
 	if (!ui.selectMode) {
 		return;
@@ -823,10 +967,9 @@ function onPointerDown(event) {
 			'data-edge-index'
 		);
 
-	// Clicking an edge in Select mode
-	// edits its weight.
-
-	if (edgeIndex !== null) {
+	if (
+		edgeIndex !== null
+	) {
 		editEdgeWeight(
 			Number(edgeIndex)
 		);
@@ -836,8 +979,6 @@ function onPointerDown(event) {
 		return;
 	}
 
-	// Clicking empty space clears selection.
-
 	if (!nodeId) {
 		ui.selectedNodeId =
 			null;
@@ -846,9 +987,6 @@ function onPointerDown(event) {
 
 		return;
 	}
-
-	// Clicking a node selects it
-	// and allows dragging.
 
 	ui.selectedNodeId =
 		nodeId;
@@ -867,7 +1005,9 @@ function onPointerDown(event) {
 // POINTER MOVE
 // ======================================================
 
-function onPointerMove(event) {
+function onPointerMove(
+	event
+) {
 	if (!ui.draggingNodeId) {
 		return;
 	}
@@ -881,22 +1021,30 @@ function onPointerMove(event) {
 		return;
 	}
 
-	const { x, y } =
-		toSvgPoint(
-			event.clientX,
-			event.clientY
-		);
+	const {
+		x,
+		y,
+	} = toSvgPoint(
+		event.clientX,
+		event.clientY
+	);
 
 	activeNode.x =
 		Math.max(
 			24,
-			Math.min(736, x)
+			Math.min(
+				736,
+				x
+			)
 		);
 
 	activeNode.y =
 		Math.max(
 			24,
-			Math.min(396, y)
+			Math.min(
+				396,
+				y
+			)
 		);
 
 	renderGraph();
@@ -906,12 +1054,15 @@ function onPointerMove(event) {
 // POINTER UP
 // ======================================================
 
-function onPointerUp(event) {
+function onPointerUp(
+	event
+) {
 	if (!ui.draggingNodeId) {
 		return;
 	}
 
-	ui.draggingNodeId = null;
+	ui.draggingNodeId =
+		null;
 
 	if (
 		svg.hasPointerCapture(
@@ -964,7 +1115,9 @@ deleteBtn.addEventListener(
 selectBtn.addEventListener(
 	'click',
 	() => {
-		setMode('select');
+		setMode(
+			'select'
+		);
 	}
 );
 
@@ -998,8 +1151,3 @@ svg.addEventListener(
 
 updateModeUi();
 renderGraph();
-
-// Initial adjacency list.
-// Since graph.edges starts empty, this will correctly show
-// empty adjacency arrays at first.
-logAdjacencyList();
