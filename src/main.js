@@ -1,6 +1,9 @@
 import { buildAdjacencyList } from './graph.js';
 import { dijkstra } from './dijkstra.js';
-
+import {
+    dijkstraWithSteps
+} from './dijkstra.js';
+ 
 const svgNS = 'http://www.w3.org/2000/svg';
 
 // ======================================================
@@ -15,7 +18,17 @@ const graph = {
 		{ id: 'D', x: 260, y: 290 },
 	],
 
-	// TEMPORARY M4B TEST GRAPH
+	edges: [],
+};
+
+const testGraph = {
+	nodes: [
+		{ id: 'A' },
+		{ id: 'B' },
+		{ id: 'C' },
+		{ id: 'D' },
+	],
+
 	edges: [
 		{ source: 'A', target: 'B', weight: 5 },
 		{ source: 'A', target: 'C', weight: 2 },
@@ -24,6 +37,48 @@ const graph = {
 	],
 };
 
+const testAdjacencyList =
+	buildAdjacencyList(testGraph);
+
+const testResult =
+	dijkstraWithSteps(
+		testAdjacencyList,
+		'A'
+	);
+
+console.log(
+	'========== M4D.1 DIJKSTRA STEPS TEST =========='
+);
+
+console.log(
+	'Test Adjacency List:',
+	testAdjacencyList
+);
+
+console.log(
+	'Final Distances:',
+	testResult.distances
+);
+
+console.log(
+	'Final Previous:',
+	testResult.previous
+);
+
+console.log(
+	'Execution Steps:',
+	testResult.steps
+);
+
+console.log(
+	'Number of Steps:',
+	testResult.steps.length
+);
+
+console.log(
+	'==============================================='
+);
+
 // ======================================================
 // UI STATE
 // ======================================================
@@ -31,52 +86,289 @@ const graph = {
 const ui = {
 	selectedNodeId: null,
 	draggingNodeId: null,
+	startNodeId: null,
+	destinationNodeId: null,
 
 	selectMode: true,
 	addNodeMode: false,
 	addEdgeMode: false,
 	deleteMode: false,
+	startMode: false,
+	destinationMode: false,
 
 	edgeSourceNodeId: null,
 };
 
-// ======================================================
-// M4B — DIJKSTRA TEST
-// ======================================================
+const animation = {
+	steps: [],
+	currentStepIndex: -1,
+	visitedNodes: new Set(),
+	currentNodeId: null,
+	checkingEdge: null,
+	distanceUpdates: {},
+	distances: {},
+	previous: {},
+	finalPath: [],
+	isRunning: false,
+	timeoutId: null,
+	isPrepared: false,
+};
 
-const adjacencyList = buildAdjacencyList(graph);
+function resetAnimationState() {
+	animation.steps = [];
+	animation.currentStepIndex = -1;
+	animation.visitedNodes.clear();
+	animation.currentNodeId = null;
+	animation.checkingEdge = null;
+	animation.distanceUpdates = {};
+	animation.distances = {};
+	animation.previous = {};
+	animation.finalPath = [];
+	animation.isPrepared = false;
+}
 
-const dijkstraResult = dijkstra(
-	adjacencyList,
-	'A'
-);
+function applyAnimationStep(step) {
+	if (!step) {
+		return;
+	}
 
-console.log(
-	'========== DIJKSTRA TEST =========='
-);
+	if (step.type === 'current') {
+		animation.currentNodeId = step.node;
+	} else if (step.type === 'checking-edge') {
+		animation.checkingEdge = {
+			from: step.from,
+			to: step.to,
+		};
+	} else if (step.type === 'update-distance') {
+		animation.distanceUpdates[step.node] = step.distance;
+	} else if (step.type === 'visited') {
+		animation.visitedNodes.add(step.node);
+	}
 
-console.log(
-	'Adjacency List:',
-	JSON.stringify(
-		adjacencyList,
-		null,
-		2
-	)
-);
+	animation.currentStepIndex++;
+}
 
-console.log(
-	'Distances:',
-	dijkstraResult.distances
-);
+function reconstructShortestPath(
+	previous,
+	startNode,
+	destinationNode
+) {
+	if (startNode === destinationNode) {
+		return [startNode];
+	}
 
-console.log(
-	'Previous:',
-	dijkstraResult.previous
-);
+	const path = [];
+	const seenNodes = new Set();
+	let currentNode = destinationNode;
 
-console.log(
-	'===================================='
-);
+	while (
+		currentNode !== null &&
+		!seenNodes.has(currentNode)
+	) {
+		seenNodes.add(currentNode);
+		path.unshift(currentNode);
+
+		if (currentNode === startNode) {
+			return path;
+		}
+
+		currentNode =
+			previous[currentNode];
+	}
+
+	return [];
+}
+
+function completeAnimation() {
+	animation.checkingEdge = null;
+	animation.finalPath =
+		reconstructShortestPath(
+			animation.previous,
+			ui.startNodeId,
+			ui.destinationNodeId
+		);
+
+	if (animation.finalPath.length === 0) {
+		pathResult.textContent =
+			'No path exists between the selected nodes.';
+	} else {
+		pathResult.textContent =
+			`Shortest Path: ${animation.finalPath.join(' → ')} | Total Distance: ${animation.distances[ui.destinationNodeId]}`;
+	}
+}
+
+function logAnimationStep(step) {
+	console.log(
+		`========== DIJKSTRA STEP ${animation.currentStepIndex} ==========`
+	);
+	console.log('Event:', step.type);
+
+	if (step.type === 'current') {
+		console.log('Current Node:', step.node);
+	} else if (step.type === 'checking-edge') {
+		console.log('From:', step.from);
+		console.log('To:', step.to);
+		console.log('Weight:', step.weight);
+	} else if (step.type === 'update-distance') {
+		console.log('Node:', step.node);
+		console.log('New Distance:', step.distance);
+		console.log('Previous:', step.previous);
+	} else if (step.type === 'visited') {
+		console.log('Node:', step.node);
+		console.log('Visited Nodes:', [...animation.visitedNodes]);
+	}
+
+	console.log('Animation State:');
+	console.log('Current Node:', animation.currentNodeId);
+	console.log('Visited:', [...animation.visitedNodes]);
+	console.log('Checking Edge:', animation.checkingEdge);
+	console.log('Distance Updates:', animation.distanceUpdates);
+	console.log('======================================');
+}
+
+function updateAnimationControls() {
+	nextStepBtn.disabled =
+		animation.isRunning ||
+		(animation.isPrepared &&
+			animation.currentStepIndex >=
+				animation.steps.length - 1);
+
+	runAnimationBtn.disabled =
+		animation.isRunning;
+}
+
+function prepareAnimation() {
+	if (ui.startNodeId === null) {
+		pathResult.textContent =
+			'Please select a start node.';
+		return false;
+	}
+
+	if (ui.destinationNodeId === null) {
+		pathResult.textContent =
+			'Please select a destination node.';
+		return false;
+	}
+
+	if (ui.startNodeId === ui.destinationNodeId) {
+		pathResult.textContent =
+			'Start and destination must be different.';
+		return false;
+	}
+
+	const adjacencyList =
+		buildAdjacencyList(graph);
+
+	const result =
+		dijkstraWithSteps(
+			adjacencyList,
+			ui.startNodeId
+		);
+
+	resetAnimationState();
+	animation.steps = result.steps;
+	animation.distances = result.distances;
+	animation.previous = result.previous;
+	animation.isPrepared = true;
+
+	pathResult.textContent = '';
+	updateAnimationControls();
+	renderGraph();
+
+	return true;
+}
+
+function stepForward() {
+	if (!animation.isPrepared && !prepareAnimation()) {
+		return;
+	}
+
+	if (
+		animation.currentStepIndex >=
+		animation.steps.length - 1
+	) {
+		updateAnimationControls();
+		return;
+	}
+
+	applyAnimationStep(
+		animation.steps[
+			animation.currentStepIndex + 1
+		]
+	);
+
+	logAnimationStep(
+		animation.steps[
+			animation.currentStepIndex
+		]
+	);
+
+	if (
+		animation.currentStepIndex >=
+		animation.steps.length - 1
+	) {
+		completeAnimation();
+	}
+
+	updateAnimationControls();
+	renderGraph();
+}
+
+function runAnimation() {
+	if (animation.isRunning) {
+		return;
+	}
+
+	if (!animation.isPrepared && !prepareAnimation()) {
+		return;
+	}
+
+	if (
+		animation.currentStepIndex >=
+		animation.steps.length - 1
+	) {
+		return;
+	}
+
+	animation.isRunning = true;
+	updateAnimationControls();
+
+	const advance = () => {
+		stepForward();
+
+		if (
+			animation.currentStepIndex >=
+			animation.steps.length - 1
+		) {
+			animation.isRunning = false;
+			animation.timeoutId = null;
+			updateAnimationControls();
+			return;
+		}
+
+		animation.timeoutId =
+			window.setTimeout(
+				advance,
+				500
+			);
+	};
+
+	advance();
+}
+
+function resetVisualization() {
+	if (animation.timeoutId !== null) {
+		window.clearTimeout(
+			animation.timeoutId
+		);
+	}
+
+	animation.timeoutId = null;
+	animation.isRunning = false;
+	resetAnimationState();
+	updateAnimationControls();
+	renderGraph();
+}
 
 // ======================================================
 // APP UI
@@ -169,6 +461,96 @@ app.innerHTML = `
 				Delete
 			</button>
 
+			<button
+				id="start-node-btn"
+				type="button"
+				style="
+					padding: 8px 12px;
+					border: 1px solid #15803d;
+					border-radius: 8px;
+					background: #ffffff;
+					color: #15803d;
+					cursor: pointer;
+				"
+			>
+				Start Node
+			</button>
+
+			<button
+				id="destination-node-btn"
+				type="button"
+				style="
+					padding: 8px 12px;
+					border: 1px solid #b91c1c;
+					border-radius: 8px;
+					background: #ffffff;
+					color: #b91c1c;
+					cursor: pointer;
+				"
+			>
+				Destination
+			</button>
+
+			<button
+				id="run-dijkstra-btn"
+				type="button"
+				style="
+					padding: 8px 12px;
+					border: 1px solid #0f172a;
+					border-radius: 8px;
+					background: #ffffff;
+					color: #0f172a;
+					cursor: pointer;
+				"
+			>
+				Run Dijkstra
+			</button>
+
+			<button
+				id="run-animation-btn"
+				type="button"
+				style="
+					padding: 8px 12px;
+					border: 1px solid #0f172a;
+					border-radius: 8px;
+					background: #ffffff;
+					color: #0f172a;
+					cursor: pointer;
+				"
+			>
+				▶ Run
+			</button>
+
+			<button
+				id="next-step-btn"
+				type="button"
+				style="
+					padding: 8px 12px;
+					border: 1px solid #0f172a;
+					border-radius: 8px;
+					background: #ffffff;
+					color: #0f172a;
+					cursor: pointer;
+				"
+			>
+				⏭ Next Step
+			</button>
+
+			<button
+				id="reset-animation-btn"
+				type="button"
+				style="
+					padding: 8px 12px;
+					border: 1px solid #0f172a;
+					border-radius: 8px;
+					background: #ffffff;
+					color: #0f172a;
+					cursor: pointer;
+				"
+			>
+				↻ Reset
+			</button>
+
 			<span
 				id="mode-label"
 				style="
@@ -179,6 +561,14 @@ app.innerHTML = `
 				Mode: Select / Drag
 			</span>
 		</div>
+
+		<div
+			id="path-result"
+			style="
+				min-height: 24px;
+				margin: 0 0 14px;
+			"
+		></div>
 
 		<svg
 			id="graph-svg"
@@ -212,8 +602,29 @@ const addEdgeBtn =
 const deleteBtn =
 	document.querySelector('#delete-btn');
 
+const startNodeBtn =
+	document.querySelector('#start-node-btn');
+
+const destinationBtn =
+	document.querySelector('#destination-node-btn');
+
+const runDijkstraBtn =
+	document.querySelector('#run-dijkstra-btn');
+
+const runAnimationBtn =
+	document.querySelector('#run-animation-btn');
+
+const nextStepBtn =
+	document.querySelector('#next-step-btn');
+
+const resetAnimationBtn =
+	document.querySelector('#reset-animation-btn');
+
 const modeLabel =
 	document.querySelector('#mode-label');
+
+const pathResult =
+	document.querySelector('#path-result');
 
 // ======================================================
 // SVG HELPER
@@ -294,6 +705,27 @@ function getNextNodeId() {
 	return indexToNodeId(index);
 }
 
+function reconstructPath(
+	previous,
+	startNode,
+	destinationNode
+) {
+	const path = [];
+	let currentNode = destinationNode;
+
+	while (currentNode !== null) {
+		path.unshift(currentNode);
+
+		if (currentNode === startNode) {
+			return path;
+		}
+
+		currentNode = previous[currentNode];
+	}
+
+	return [];
+}
+
 // ======================================================
 // NODE CREATION
 // ======================================================
@@ -368,6 +800,21 @@ function renderNodes() {
 				ui.edgeSourceNodeId ===
 				node.id;
 
+			const isStart =
+				ui.startNodeId === node.id;
+
+			const isDestination =
+				ui.destinationNodeId === node.id;
+
+			const isCurrent =
+				animation.currentNodeId === node.id;
+
+			const isVisited =
+				animation.visitedNodes.has(node.id);
+
+			const isFinalPath =
+				animation.finalPath.includes(node.id);
+
 			const nodeGroup =
 				createSvgElement(
 					'g',
@@ -389,20 +836,34 @@ function renderNodes() {
 						r: 24,
 
 						fill:
-							isEdgeSource
-								? '#f59e0b'
-								: isSelected
-									? '#0ea5e9'
-									: '#22c55e',
+							isDestination
+								? '#ef4444'
+								: isStart
+									? '#22c55e'
+										: isFinalPath
+											? '#facc15'
+									: isCurrent
+										? '#3b82f6'
+										: isVisited
+											? '#7c3aed'
+											: isSelected
+												? '#0ea5e9'
+												: '#94a3b8',
 
 						stroke:
-							isEdgeSource
-								? '#b45309'
-								: '#0f172a',
+							isDestination
+								? '#b91c1c'
+								: isStart
+									? '#15803d'
+									: isEdgeSource
+										? '#b45309'
+										: '#0f172a',
 
 						'stroke-width':
 							isEdgeSource ||
-							isSelected
+							isSelected ||
+							isStart ||
+							isDestination
 								? 3
 								: 2,
 
@@ -478,6 +939,42 @@ function renderEdges() {
 				return;
 			}
 
+			const isCheckingEdge =
+				animation.checkingEdge &&
+				(
+					(
+						edge.source ===
+							animation.checkingEdge.from &&
+						edge.target ===
+							animation.checkingEdge.to
+					) ||
+					(
+						edge.source ===
+							animation.checkingEdge.to &&
+						edge.target ===
+							animation.checkingEdge.from
+					)
+				);
+
+			const finalPathIndex =
+				animation.finalPath.indexOf(
+					edge.source
+				);
+
+			const isFinalPathEdge =
+				finalPathIndex !== -1 &&
+				(
+					animation.finalPath[
+						finalPathIndex + 1
+					] === edge.target ||
+					(
+						finalPathIndex > 0 &&
+						animation.finalPath[
+							finalPathIndex - 1
+						] === edge.target
+					)
+				);
+
 			const line =
 				createSvgElement(
 					'line',
@@ -489,9 +986,18 @@ function renderEdges() {
 						y2: target.y,
 
 						stroke:
-							'#64748b',
+							isFinalPathEdge
+								? '#eab308'
+								: isCheckingEdge
+								? '#2563eb'
+								: '#64748b',
 
-						'stroke-width': 2,
+						'stroke-width':
+							isFinalPathEdge
+								? 5
+								: isCheckingEdge
+								? 4
+								: 2,
 
 						'pointer-events':
 							'stroke',
@@ -564,6 +1070,25 @@ function renderGraph() {
 	renderNodes();
 }
 
+function testAnimationStep() {
+	resetAnimationState();
+	animation.steps = testResult.steps;
+	animation.isPrepared = false;
+
+	applyAnimationStep(
+		animation.steps[0]
+	);
+
+	renderGraph();
+
+	console.log(
+		'M4D.2 Animation State:',
+		animation
+	);
+
+	updateAnimationControls();
+}
+
 // ======================================================
 // MODE UI
 // ======================================================
@@ -611,6 +1136,36 @@ function updateModeUi() {
 		ui.addEdgeMode
 	);
 
+	activeButtonStyle(
+		startNodeBtn,
+		ui.startMode
+	);
+
+	activeButtonStyle(
+		destinationBtn,
+		ui.destinationMode
+	);
+
+	startNodeBtn.style.background =
+		ui.startMode
+			? '#15803d'
+			: '#ffffff';
+
+	startNodeBtn.style.color =
+		ui.startMode
+			? '#ffffff'
+			: '#15803d';
+
+	destinationBtn.style.background =
+		ui.destinationMode
+			? '#b91c1c'
+			: '#ffffff';
+
+	destinationBtn.style.color =
+		ui.destinationMode
+			? '#ffffff'
+			: '#b91c1c';
+
 	deleteBtn.style.background =
 		ui.deleteMode
 			? '#b91c1c'
@@ -636,6 +1191,16 @@ function updateModeUi() {
 	) {
 		modeLabel.textContent =
 			'Mode: Delete (click a node or edge)';
+	} else if (
+		ui.startMode
+	) {
+		modeLabel.textContent =
+			'Mode: Select Start Node';
+	} else if (
+		ui.destinationMode
+	) {
+		modeLabel.textContent =
+			'Mode: Select Destination Node';
 	} else {
 		modeLabel.textContent =
 			'Mode: Select / Drag';
@@ -664,6 +1229,12 @@ function setMode(mode) {
 
 	ui.draggingNodeId =
 		null;
+
+	ui.startMode =
+		mode === 'start';
+
+	ui.destinationMode =
+		mode === 'destination';
 
 	updateModeUi();
 	renderGraph();
@@ -828,6 +1399,22 @@ function deleteNode(
 		ui.edgeSourceNodeId =
 			null;
 	}
+
+	if (
+		ui.startNodeId ===
+		nodeId
+	) {
+		ui.startNodeId =
+			null;
+	}
+
+	if (
+		ui.destinationNodeId ===
+		nodeId
+	) {
+		ui.destinationNodeId =
+			null;
+	}
 }
 
 // ======================================================
@@ -887,6 +1474,31 @@ function onPointerDown(
 		);
 
 		renderGraph();
+
+		return;
+	}
+
+	// START OR DESTINATION NODE
+
+	if (
+		ui.startMode ||
+		ui.destinationMode
+	) {
+		if (!nodeId) {
+			return;
+		}
+
+		if (ui.startMode) {
+			ui.startNodeId =
+				nodeId;
+		} else {
+			ui.destinationNodeId =
+				nodeId;
+		}
+
+		setMode(
+			'select'
+		);
 
 		return;
 	}
@@ -1079,6 +1691,80 @@ function onPointerUp(
 // BUTTON EVENTS
 // ======================================================
 
+runDijkstraBtn.addEventListener(
+	'click',
+	() => {
+		pathResult.textContent =
+			'';
+
+		if (ui.startNodeId === null) {
+			pathResult.textContent =
+				'Please select a start node.';
+			return;
+		}
+
+		if (ui.destinationNodeId === null) {
+			pathResult.textContent =
+				'Please select a destination node.';
+			return;
+		}
+
+		if (
+			ui.startNodeId ===
+			ui.destinationNodeId
+		) {
+			pathResult.textContent =
+				'Start and destination must be different.';
+			return;
+		}
+
+		const adjacencyList =
+			buildAdjacencyList(graph);
+
+		const result =
+			dijkstra(
+				adjacencyList,
+				ui.startNodeId
+			);
+
+		const distance =
+			result.distances[
+				ui.destinationNodeId
+			];
+
+		if (distance === Infinity) {
+			pathResult.textContent =
+				'No path exists between the selected nodes.';
+			return;
+		}
+
+		const path =
+			reconstructPath(
+				result.previous,
+				ui.startNodeId,
+				ui.destinationNodeId
+			);
+
+		pathResult.textContent =
+			`Shortest Path: ${path.join(' -> ')} | Total Distance: ${distance}`;
+	}
+);
+
+runAnimationBtn.addEventListener(
+	'click',
+	runAnimation
+);
+
+nextStepBtn.addEventListener(
+	'click',
+	stepForward
+);
+
+resetAnimationBtn.addEventListener(
+	'click',
+	resetVisualization
+);
+
 addNodeBtn.addEventListener(
 	'click',
 	() => {
@@ -1086,6 +1772,28 @@ addNodeBtn.addEventListener(
 			ui.addNodeMode
 				? 'select'
 				: 'add-node'
+		);
+	}
+);
+
+startNodeBtn.addEventListener(
+	'click',
+	() => {
+		setMode(
+			ui.startMode
+				? 'select'
+				: 'start'
+		);
+	}
+);
+
+destinationBtn.addEventListener(
+	'click',
+	() => {
+		setMode(
+			ui.destinationMode
+				? 'select'
+				: 'destination'
 		);
 	}
 );
@@ -1151,3 +1859,4 @@ svg.addEventListener(
 
 updateModeUi();
 renderGraph();
+testAnimationStep();

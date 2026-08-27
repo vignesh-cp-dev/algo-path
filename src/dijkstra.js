@@ -39,3 +39,70 @@ export function dijkstra(adjacencyList, startNode) {
 
 	return { distances, previous };
 }
+
+export function dijkstraWithSteps(adjacencyList, startNode) {
+	const distances = {};
+	const previous = {};
+	const visited = new Set();
+	const steps = [];
+
+	Object.keys(adjacencyList).forEach((node) => {
+		distances[node] = Infinity;
+		previous[node] = null;
+	});
+
+	distances[startNode] = 0;
+
+	while (visited.size < Object.keys(adjacencyList).length) {
+		let currentNode = null;
+		let shortestDistance = Infinity;
+
+		Object.keys(distances).forEach((node) => {
+			if (!visited.has(node) && distances[node] < shortestDistance) {
+				shortestDistance = distances[node];
+				currentNode = node;
+			}
+		});
+
+		if (currentNode === null) {
+			break;
+		}
+
+		steps.push({
+			type: 'current',
+			node: currentNode,
+		});
+
+		adjacencyList[currentNode].forEach(({ node, weight }) => {
+			steps.push({
+				type: 'checking-edge',
+				from: currentNode,
+				to: node,
+				weight,
+			});
+
+			const distanceThroughCurrent = distances[currentNode] + weight;
+
+			if (distanceThroughCurrent < distances[node]) {
+				distances[node] = distanceThroughCurrent;
+				previous[node] = currentNode;
+
+				steps.push({
+					type: 'update-distance',
+					node,
+					distance: distanceThroughCurrent,
+					previous: currentNode,
+				});
+			}
+		});
+
+		visited.add(currentNode);
+
+		steps.push({
+			type: 'visited',
+			node: currentNode,
+		});
+	}
+
+	return { distances, previous, steps };
+}
