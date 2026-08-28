@@ -1,9 +1,8 @@
 import { buildAdjacencyList } from './graph.js';
-import { dijkstra } from './dijkstra.js';
 import {
     dijkstraWithSteps
 } from './dijkstra.js';
- 
+
 const svgNS = 'http://www.w3.org/2000/svg';
 
 // ======================================================
@@ -18,67 +17,13 @@ const graph = {
 		{ id: 'D', x: 260, y: 290 },
 	],
 
-	edges: [],
-};
-
-const testGraph = {
-	nodes: [
-		{ id: 'A' },
-		{ id: 'B' },
-		{ id: 'C' },
-		{ id: 'D' },
-	],
-
 	edges: [
-		{ source: 'A', target: 'B', weight: 5 },
+		{ source: 'A', target: 'B', weight: 4 },
+		{ source: 'B', target: 'D', weight: 5 },
 		{ source: 'A', target: 'C', weight: 2 },
-		{ source: 'C', target: 'D', weight: 3 },
-		{ source: 'B', target: 'D', weight: 1 },
+		{ source: 'C', target: 'D', weight: 1 },
 	],
 };
-
-const testAdjacencyList =
-	buildAdjacencyList(testGraph);
-
-const testResult =
-	dijkstraWithSteps(
-		testAdjacencyList,
-		'A'
-	);
-
-console.log(
-	'========== M4D.1 DIJKSTRA STEPS TEST =========='
-);
-
-console.log(
-	'Test Adjacency List:',
-	testAdjacencyList
-);
-
-console.log(
-	'Final Distances:',
-	testResult.distances
-);
-
-console.log(
-	'Final Previous:',
-	testResult.previous
-);
-
-console.log(
-	'Execution Steps:',
-	testResult.steps
-);
-
-console.log(
-	'Number of Steps:',
-	testResult.steps.length
-);
-
-console.log(
-	'==============================================='
-);
-
 // ======================================================
 // UI STATE
 // ======================================================
@@ -195,91 +140,95 @@ function completeAnimation() {
 		pathResult.textContent =
 			`Shortest Path: ${animation.finalPath.join(' → ')} | Total Distance: ${animation.distances[ui.destinationNodeId]}`;
 	}
-}
 
-function logAnimationStep(step) {
-	console.log(
-		`========== DIJKSTRA STEP ${animation.currentStepIndex} ==========`
-	);
-	console.log('Event:', step.type);
-
-	if (step.type === 'current') {
-		console.log('Current Node:', step.node);
-	} else if (step.type === 'checking-edge') {
-		console.log('From:', step.from);
-		console.log('To:', step.to);
-		console.log('Weight:', step.weight);
-	} else if (step.type === 'update-distance') {
-		console.log('Node:', step.node);
-		console.log('New Distance:', step.distance);
-		console.log('Previous:', step.previous);
-	} else if (step.type === 'visited') {
-		console.log('Node:', step.node);
-		console.log('Visited Nodes:', [...animation.visitedNodes]);
-	}
-
-	console.log('Animation State:');
-	console.log('Current Node:', animation.currentNodeId);
-	console.log('Visited:', [...animation.visitedNodes]);
-	console.log('Checking Edge:', animation.checkingEdge);
-	console.log('Distance Updates:', animation.distanceUpdates);
-	console.log('======================================');
+	updateAnimationControls();
+	renderResultPanel();
+	renderExplanationPanel();
 }
 
 function updateAnimationControls() {
-	nextStepBtn.disabled =
-		animation.isRunning ||
-		(animation.isPrepared &&
-			animation.currentStepIndex >=
-				animation.steps.length - 1);
+	const isComplete =
+		animation.isPrepared &&
+		animation.currentStepIndex >=
+			animation.steps.length - 1;
 
-	runAnimationBtn.disabled =
+	const hasValidStartAndDest =
+		ui.startNodeId !== null &&
+		ui.destinationNodeId !== null;
+
+	// Prepare Dijkstra:
+	// Enabled anytime, but disabled during animation
+	runDijkstraBtn.disabled =
 		animation.isRunning;
+
+	// Run:
+	// Enabled only if prepared, not running, and not complete
+	runAnimationBtn.disabled =
+		!animation.isPrepared ||
+		animation.isRunning ||
+		isComplete;
+
+	// Next Step:
+	// Enabled only if prepared, not running, and not complete
+	nextStepBtn.disabled =
+		!animation.isPrepared ||
+		animation.isRunning ||
+		isComplete;
+
+	// Reset:
+	// Always enabled (can reset anytime)
+	// No need to set .disabled since we want it always available
+
+	updateModeUi();
 }
 
 function prepareAnimation() {
+	// Validate Start Node
 	if (ui.startNodeId === null) {
 		pathResult.textContent =
-			'Please select a start node.';
+			'Select a Start Node first.';
 		return false;
 	}
 
+	// Validate Destination Node
 	if (ui.destinationNodeId === null) {
 		pathResult.textContent =
-			'Please select a destination node.';
+			'Select a Destination first.';
 		return false;
 	}
 
-	if (ui.startNodeId === ui.destinationNodeId) {
-		pathResult.textContent =
-			'Start and destination must be different.';
-		return false;
-	}
-
+	// Build adjacency list from current graph
 	const adjacencyList =
 		buildAdjacencyList(graph);
 
+	// Run Dijkstra algorithm
 	const result =
 		dijkstraWithSteps(
 			adjacencyList,
 			ui.startNodeId
 		);
 
+	// Reset animation state and apply results
 	resetAnimationState();
 	animation.steps = result.steps;
 	animation.distances = result.distances;
 	animation.previous = result.previous;
 	animation.isPrepared = true;
 
+	// Clear any previous messages
 	pathResult.textContent = '';
+
+	// Update UI to reflect prepared state
 	updateAnimationControls();
+	renderResultPanel();
+	renderExplanationPanel();
 	renderGraph();
 
 	return true;
 }
 
 function stepForward() {
-	if (!animation.isPrepared && !prepareAnimation()) {
+	if (!animation.isPrepared) {
 		return;
 	}
 
@@ -297,12 +246,6 @@ function stepForward() {
 		]
 	);
 
-	logAnimationStep(
-		animation.steps[
-			animation.currentStepIndex
-		]
-	);
-
 	if (
 		animation.currentStepIndex >=
 		animation.steps.length - 1
@@ -311,6 +254,8 @@ function stepForward() {
 	}
 
 	updateAnimationControls();
+	renderResultPanel();
+	renderExplanationPanel();
 	renderGraph();
 }
 
@@ -319,7 +264,7 @@ function runAnimation() {
 		return;
 	}
 
-	if (!animation.isPrepared && !prepareAnimation()) {
+	if (!animation.isPrepared) {
 		return;
 	}
 
@@ -332,6 +277,8 @@ function runAnimation() {
 
 	animation.isRunning = true;
 	updateAnimationControls();
+	renderResultPanel();
+	renderExplanationPanel();
 
 	const advance = () => {
 		stepForward();
@@ -343,6 +290,8 @@ function runAnimation() {
 			animation.isRunning = false;
 			animation.timeoutId = null;
 			updateAnimationControls();
+			renderResultPanel();
+			renderExplanationPanel();
 			return;
 		}
 
@@ -366,7 +315,10 @@ function resetVisualization() {
 	animation.timeoutId = null;
 	animation.isRunning = false;
 	resetAnimationState();
+	pathResult.textContent = '';
 	updateAnimationControls();
+	renderResultPanel();
+	renderExplanationPanel();
 	renderGraph();
 }
 
@@ -503,7 +455,7 @@ app.innerHTML = `
 					cursor: pointer;
 				"
 			>
-				Run Dijkstra
+				Prepare Dijkstra
 			</button>
 
 			<button
@@ -581,6 +533,41 @@ app.innerHTML = `
 				touch-action: none;
 			"
 		></svg>
+
+		<div
+			id="legend-container"
+			style="
+				margin: 20px 0 0;
+				padding: 16px;
+				border: 1px solid #d2d2d2;
+				border-radius: 10px;
+				background: #f8f8f8;
+			"
+		></div>
+
+		<div
+			id="result-panel"
+			style="
+				margin: 20px 0 0;
+				padding: 16px;
+				border: 1px solid #d2d2d2;
+				border-radius: 10px;
+				background: #f9fafb;
+				min-height: 100px;
+			"
+		></div>
+
+		<div
+			id="explanation-panel"
+			style="
+				margin: 20px 0 0;
+				padding: 16px;
+				border: 1px solid #d2d2d2;
+				border-radius: 10px;
+				background: #f0f9ff;
+				min-height: 100px;
+			"
+		></div>
 	</div>
 `;
 
@@ -625,6 +612,15 @@ const modeLabel =
 
 const pathResult =
 	document.querySelector('#path-result');
+
+const legendContainer =
+	document.querySelector('#legend-container');
+
+const resultPanel =
+	document.querySelector('#result-panel');
+
+const explanationPanel =
+	document.querySelector('#explanation-panel');
 
 // ======================================================
 // SVG HELPER
@@ -1070,23 +1066,416 @@ function renderGraph() {
 	renderNodes();
 }
 
-function testAnimationStep() {
-	resetAnimationState();
-	animation.steps = testResult.steps;
-	animation.isPrepared = false;
+// ======================================================
+// RENDER LEGEND
+// ======================================================
 
-	applyAnimationStep(
-		animation.steps[0]
-	);
+function renderLegend() {
+	legendContainer.innerHTML = `
+		<h3 style="
+			margin: 0 0 12px;
+			font-size: 1.1rem;
+			font-weight: 600;
+			color: #0f172a;
+		">
+			Legend
+		</h3>
+		<div style="
+			display: grid;
+			grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+			gap: 12px;
+		">
+			<div style="display: flex; align-items: center; gap: 8px;">
+				<div style="
+					width: 24px;
+					height: 24px;
+					border-radius: 50%;
+					background: #22c55e;
+					border: 2px solid #15803d;
+				"></div>
+				<span style="font-size: 0.95rem;">Start Node</span>
+			</div>
+			<div style="display: flex; align-items: center; gap: 8px;">
+				<div style="
+					width: 24px;
+					height: 24px;
+					border-radius: 50%;
+					background: #ef4444;
+					border: 2px solid #b91c1c;
+				"></div>
+				<span style="font-size: 0.95rem;">Destination</span>
+			</div>
+			<div style="display: flex; align-items: center; gap: 8px;">
+				<div style="
+					width: 24px;
+					height: 24px;
+					border-radius: 50%;
+					background: #7c3aed;
+					border: 2px solid #0f172a;
+				"></div>
+				<span style="font-size: 0.95rem;">Visited Node</span>
+			</div>
+			<div style="display: flex; align-items: center; gap: 8px;">
+				<div style="
+					width: 24px;
+					height: 24px;
+					border-radius: 50%;
+					background: #3b82f6;
+					border: 2px solid #0f172a;
+				"></div>
+				<span style="font-size: 0.95rem;">Current Node</span>
+			</div>
+			<div style="display: flex; align-items: center; gap: 8px;">
+				<div style="
+					width: 24px;
+					height: 24px;
+					border-radius: 50%;
+					background: #facc15;
+					border: 2px solid #0f172a;
+				"></div>
+				<span style="font-size: 0.95rem;">Shortest Path Node</span>
+			</div>
+			<div style="display: flex; align-items: center; gap: 8px;">
+				<div style="
+					width: 100px;
+					height: 2px;
+					background: #64748b;
+				"></div>
+				<span style="font-size: 0.95rem;">Normal Edge</span>
+			</div>
+			<div style="display: flex; align-items: center; gap: 8px;">
+				<div style="
+					width: 100px;
+					height: 3px;
+					background: #2563eb;
+				"></div>
+				<span style="font-size: 0.95rem;">Checking Edge</span>
+			</div>
+			<div style="display: flex; align-items: center; gap: 8px;">
+				<div style="
+					width: 100px;
+					height: 4px;
+					background: #eab308;
+				"></div>
+				<span style="font-size: 0.95rem;">Shortest Path Edge</span>
+			</div>
+		</div>
+	`;
+}
 
-	renderGraph();
+// ======================================================
+// RENDER RESULT PANEL
+// ======================================================
 
-	console.log(
-		'M4D.2 Animation State:',
-		animation
-	);
+function renderResultPanel() {
+	let content = '';
 
-	updateAnimationControls();
+	// Case 1: Animation is running
+	if (animation.isRunning) {
+		content = `
+			<h3 style="margin: 0 0 12px; font-size: 1.1rem; font-weight: 600; color: #0f172a;">
+				Dijkstra Result
+			</h3>
+			<p style="margin: 0; color: #666; font-style: italic;">
+				Animation in progress...
+			</p>
+		`;
+	}
+	// Case 2: Not prepared yet
+	else if (!animation.isPrepared) {
+		content = `
+			<h3 style="margin: 0 0 12px; font-size: 1.1rem; font-weight: 600; color: #0f172a;">
+				Dijkstra Result
+			</h3>
+			<p style="margin: 0; color: #666;">
+				Select a start and destination, then prepare Dijkstra.
+			</p>
+		`;
+	}
+	// Case 3: Prepared but animation not complete
+	else if (animation.currentStepIndex < animation.steps.length - 1) {
+		content = `
+			<h3 style="margin: 0 0 12px; font-size: 1.1rem; font-weight: 600; color: #0f172a;">
+				Dijkstra Result
+			</h3>
+			<div style="margin: 0 0 12px;">
+				<div style="margin: 0 0 8px;">
+					<span style="font-weight: 600; color: #0f172a;">Start:</span>
+					<span style="color: #22c55e; font-weight: 600;">${ui.startNodeId}</span>
+				</div>
+				<div style="margin: 0 0 8px;">
+					<span style="font-weight: 600; color: #0f172a;">Destination:</span>
+					<span style="color: #ef4444; font-weight: 600;">${ui.destinationNodeId}</span>
+				</div>
+			</div>
+			<p style="margin: 0; color: #666; font-style: italic;">
+				Ready to visualize the shortest path.
+			</p>
+		`;
+	}
+	// Case 4: Animation complete
+	else {
+		const startNode = ui.startNodeId;
+		const destNode = ui.destinationNodeId;
+
+		if (animation.finalPath.length === 0) {
+			// No path exists
+			content = `
+				<h3 style="margin: 0 0 12px; font-size: 1.1rem; font-weight: 600; color: #0f172a;">
+					Dijkstra Result
+				</h3>
+				<div style="margin: 0 0 12px;">
+					<div style="margin: 0 0 8px;">
+						<span style="font-weight: 600; color: #0f172a;">Start:</span>
+						<span style="color: #22c55e; font-weight: 600;">${startNode}</span>
+					</div>
+					<div style="margin: 0 0 8px;">
+						<span style="font-weight: 600; color: #0f172a;">Destination:</span>
+						<span style="color: #ef4444; font-weight: 600;">${destNode}</span>
+					</div>
+				</div>
+				<p style="margin: 0; color: #b91c1c; font-weight: 600;">
+					No path exists between ${startNode} and ${destNode}.
+				</p>
+			`;
+		} else {
+			// Path exists
+			const pathStr = animation.finalPath.join(' → ');
+			const distance = animation.distances[destNode];
+
+			content = `
+				<h3 style="margin: 0 0 12px; font-size: 1.1rem; font-weight: 600; color: #0f172a;">
+					Dijkstra Result
+				</h3>
+				<div style="margin: 0 0 12px;">
+					<div style="margin: 0 0 8px;">
+						<span style="font-weight: 600; color: #0f172a;">Start:</span>
+						<span style="color: #22c55e; font-weight: 600;">${startNode}</span>
+					</div>
+					<div style="margin: 0 0 8px;">
+						<span style="font-weight: 600; color: #0f172a;">Destination:</span>
+						<span style="color: #ef4444; font-weight: 600;">${destNode}</span>
+					</div>
+				</div>
+				<div style="margin: 0 0 12px;">
+					<div style="margin: 0 0 8px;">
+						<span style="font-weight: 600; color: #0f172a;">Shortest Path:</span>
+					</div>
+					<div style="
+						margin: 0;
+						padding: 8px;
+						background: #f0f0f0;
+						border-radius: 6px;
+						font-family: monospace;
+						color: #0f172a;
+						font-size: 0.95rem;
+					">
+						${pathStr}
+					</div>
+				</div>
+				<div>
+					<span style="font-weight: 600; color: #0f172a;">Total Distance:</span>
+					<span style="color: #0f172a; font-weight: 600; margin-left: 4px;">${distance}</span>
+				</div>
+			`;
+		}
+	}
+
+	resultPanel.innerHTML = content;
+}
+
+// ======================================================
+// GET EXPLANATION CONTENT
+// ======================================================
+
+function getExplanationContent() {
+	// Case 1: Not prepared yet
+	if (!animation.isPrepared) {
+		// Substep 1a: Start and Destination selected
+		if (
+			ui.startNodeId !== null &&
+			ui.destinationNodeId !== null
+		) {
+			return {
+				title: 'Ready to Run Dijkstra',
+				content: `
+					<div style="margin: 0 0 12px;">
+						<div style="margin: 0 0 8px;">
+							<span style="font-weight: 600; color: #0f172a;">Start:</span>
+							<span style="color: #22c55e; font-weight: 600;">${ui.startNodeId}</span>
+						</div>
+						<div>
+							<span style="font-weight: 600; color: #0f172a;">Destination:</span>
+							<span style="color: #ef4444; font-weight: 600;">${ui.destinationNodeId}</span>
+						</div>
+					</div>
+					<p style="margin: 0; color: #666; font-size: 0.95rem; line-height: 1.5;">
+						Click "Prepare Dijkstra" to start the algorithm.
+					</p>
+				`,
+			};
+		}
+
+		// Substep 1b: No start/destination yet
+		return {
+			title: '🧠 How Dijkstra\'s Algorithm Works',
+			content: `
+				<p style="margin: 0; color: #666; font-size: 0.95rem; line-height: 1.5;">
+					Dijkstra's algorithm finds the shortest path from a starting node through a weighted graph.
+				</p>
+				<p style="margin: 12px 0 0; color: #666; font-size: 0.95rem; line-height: 1.5;">
+					It repeatedly selects the unvisited node with the smallest known distance and checks whether travelling through that node produces a shorter distance to its neighbors.
+				</p>
+				<p style="margin: 12px 0 0; color: #999; font-size: 0.9rem; font-style: italic;">
+					Select a start and destination to begin.
+				</p>
+			`,
+		};
+	}
+
+	// Case 2: Animation is running
+	if (animation.isRunning) {
+		return {
+			title: '▶ Algorithm Running',
+			content: `
+				<p style="margin: 0; color: #666; font-size: 0.95rem; font-style: italic;">
+					Animation in progress...
+				</p>
+			`,
+		};
+	}
+
+	// Case 3: Animation is complete
+	if (animation.currentStepIndex >= animation.steps.length - 1) {
+		const startNode = ui.startNodeId;
+		const destNode = ui.destinationNodeId;
+
+		if (animation.finalPath.length === 0) {
+			// No path exists
+			return {
+				title: '🎯 Algorithm Complete',
+				content: `
+					<p style="margin: 0; color: #b91c1c; font-weight: 600;">
+						No path exists between ${startNode} and ${destNode}.
+					</p>
+					<p style="margin: 12px 0 0; color: #666; font-size: 0.95rem; line-height: 1.5;">
+						Dijkstra explored all reachable nodes but could not reach the destination.
+					</p>
+				`,
+			};
+		} else {
+			// Path exists
+			const pathStr = animation.finalPath.join(' → ');
+			const distance = animation.distances[destNode];
+
+			return {
+				title: '🎯 Algorithm Complete',
+				content: `
+					<p style="margin: 0 0 12px; color: #0f172a; font-weight: 600;">
+						The shortest path from ${startNode} to ${destNode}:
+					</p>
+					<div style="
+						padding: 8px;
+						background: #f0f0f0;
+						border-radius: 6px;
+						font-family: monospace;
+						color: #0f172a;
+						font-size: 0.95rem;
+						margin: 0 0 12px;
+					">
+						${pathStr}
+					</div>
+					<div>
+						<span style="font-weight: 600; color: #0f172a;">Total Distance:</span>
+						<span style="color: #0f172a; font-weight: 600; margin-left: 4px;">${distance}</span>
+					</div>
+				`,
+			};
+		}
+	}
+
+	// Case 4: Prepared, animation progressing (next step / run)
+	if (animation.isPrepared) {
+		const currentStep = animation.steps[animation.currentStepIndex + 1];
+		const stepNum = Math.min(animation.currentStepIndex + 2, animation.steps.length);
+		const totalSteps = animation.steps.length;
+
+		let stepContent = '';
+
+		if (currentStep) {
+			if (currentStep.type === 'current') {
+				const currentNode = currentStep.node;
+				const currentDist = animation.distances[currentNode];
+				stepContent = `
+					<p style="margin: 0 0 8px; color: #0f172a;">
+						<strong>Visiting node:</strong> ${currentNode}
+					</p>
+					<p style="margin: 0 0 12px; color: #0f172a;">
+						<strong>Current distance:</strong> ${currentDist !== undefined ? currentDist : '∞'}
+					</p>
+				`;
+			} else if (currentStep.type === 'checking-edge') {
+				stepContent = `
+					<p style="margin: 0 0 12px; color: #0f172a;">
+						<strong>Checking edge:</strong> ${currentStep.from} → ${currentStep.to}
+					</p>
+				`;
+			} else if (currentStep.type === 'update-distance') {
+				const newDist = currentStep.distance;
+				stepContent = `
+					<p style="margin: 0 0 8px; color: #22c55e; font-weight: 600;">
+						✓ Distance updated
+					</p>
+					<p style="margin: 0 0 12px; color: #0f172a;">
+						<strong>New distance to ${currentStep.node}:</strong> ${newDist}
+					</p>
+				`;
+			} else if (currentStep.type === 'visited') {
+				stepContent = `
+					<p style="margin: 0 0 12px; color: #0f172a;">
+						<strong>Marked as visited:</strong> ${currentStep.node}
+					</p>
+				`;
+			}
+		}
+
+		const visitedStr = animation.visitedNodes.size > 0
+			? Array.from(animation.visitedNodes).sort().join(', ')
+			: 'None';
+
+		return {
+			title: `Step ${stepNum} / ${totalSteps}`,
+			content: `
+				${stepContent}
+				<p style="margin: 12px 0 0; color: #666; font-size: 0.9rem;">
+					<strong>Visited nodes:</strong> ${visitedStr}
+				</p>
+			`,
+		};
+	}
+
+	// Fallback
+	return {
+		title: '🧠 Algorithm Explanation',
+		content: `<p style="margin: 0; color: #666;">Select start and destination to begin.</p>`,
+	};
+}
+
+// ======================================================
+// RENDER EXPLANATION PANEL
+// ======================================================
+
+function renderExplanationPanel() {
+	const explanation = getExplanationContent();
+
+	explanationPanel.innerHTML = `
+		<h3 style="margin: 0 0 12px; font-size: 1.1rem; font-weight: 600; color: #0f172a;">
+			${explanation.title}
+		</h3>
+		<div style="color: #0f172a; font-size: 0.95rem; line-height: 1.6;">
+			${explanation.content}
+		</div>
+	`;
 }
 
 // ======================================================
@@ -1201,6 +1590,27 @@ function updateModeUi() {
 	) {
 		modeLabel.textContent =
 			'Mode: Select Destination Node';
+	} else if (animation.isRunning) {
+		modeLabel.textContent =
+			'Running Dijkstra...';
+	} else if (
+		animation.isPrepared &&
+		animation.currentStepIndex >=
+			animation.steps.length - 1
+	) {
+		modeLabel.textContent =
+			animation.finalPath.length === 0
+				? 'No path exists'
+				: 'Dijkstra complete';
+	} else if (animation.isPrepared) {
+		modeLabel.textContent =
+			'Dijkstra prepared — choose Run or Next Step';
+	} else if (
+		ui.startNodeId !== null &&
+		ui.destinationNodeId !== null
+	) {
+		modeLabel.textContent =
+			'Ready to prepare Dijkstra';
 	} else {
 		modeLabel.textContent =
 			'Mode: Select / Drag';
@@ -1236,7 +1646,7 @@ function setMode(mode) {
 	ui.destinationMode =
 		mode === 'destination';
 
-	updateModeUi();
+	updateAnimationControls();
 	renderGraph();
 }
 
@@ -1499,6 +1909,8 @@ function onPointerDown(
 		setMode(
 			'select'
 		);
+		resetVisualization();
+		renderExplanationPanel();
 
 		return;
 	}
@@ -1693,61 +2105,7 @@ function onPointerUp(
 
 runDijkstraBtn.addEventListener(
 	'click',
-	() => {
-		pathResult.textContent =
-			'';
-
-		if (ui.startNodeId === null) {
-			pathResult.textContent =
-				'Please select a start node.';
-			return;
-		}
-
-		if (ui.destinationNodeId === null) {
-			pathResult.textContent =
-				'Please select a destination node.';
-			return;
-		}
-
-		if (
-			ui.startNodeId ===
-			ui.destinationNodeId
-		) {
-			pathResult.textContent =
-				'Start and destination must be different.';
-			return;
-		}
-
-		const adjacencyList =
-			buildAdjacencyList(graph);
-
-		const result =
-			dijkstra(
-				adjacencyList,
-				ui.startNodeId
-			);
-
-		const distance =
-			result.distances[
-				ui.destinationNodeId
-			];
-
-		if (distance === Infinity) {
-			pathResult.textContent =
-				'No path exists between the selected nodes.';
-			return;
-		}
-
-		const path =
-			reconstructPath(
-				result.previous,
-				ui.startNodeId,
-				ui.destinationNodeId
-			);
-
-		pathResult.textContent =
-			`Shortest Path: ${path.join(' -> ')} | Total Distance: ${distance}`;
-	}
+	prepareAnimation
 );
 
 runAnimationBtn.addEventListener(
@@ -1857,6 +2215,8 @@ svg.addEventListener(
 // INITIALIZE
 // ======================================================
 
-updateModeUi();
+updateAnimationControls();
 renderGraph();
-testAnimationStep();
+renderLegend();
+renderResultPanel();
+renderExplanationPanel();
